@@ -390,7 +390,9 @@ canvas { max-height: 200px; }
         </div>
       </div>
       <div class="form-group installment-group visible" id="installment-group">
-        <label>מספר תשלומים</label>
+        <label>חודש תשלום ראשון</label>
+        <input type="month" id="tx-first-payment" style="direction:ltr;text-align:right">
+        <label style="margin-top:12px">מספר תשלומים</label>
         <input type="number" id="tx-installments" value="1" min="1" max="120" inputmode="numeric">
         <p style="font-size:12px;color:var(--sub);margin-top:6px;" id="installment-hint"></p>
       </div>
@@ -1083,6 +1085,9 @@ function openAddModal() {
   document.getElementById('tx-installments').value = 1;
   document.getElementById('installment-hint').textContent = '';
   document.getElementById('tx-last4').value = '';
+  // Default first payment = next month
+  const nextMonth = new Date(); nextMonth.setMonth(nextMonth.getMonth() + 1);
+  document.getElementById('tx-first-payment').value = nextMonth.toISOString().substring(0, 7);
   setTxType('expense');
   setPayMethod('credit');
   document.getElementById('tx-modal').classList.add('open');
@@ -1099,6 +1104,14 @@ function openEditModal(id) {
   document.getElementById('tx-date').value = t.date;
   document.getElementById('tx-installments').value = t.creditGroup ? t.creditGroup.total : 1;
   document.getElementById('tx-last4').value = t.creditLast4 || '';
+  // First payment month: derive from earliest installment in the group, or purchase date
+  if (t.creditGroup) {
+    const groupTxs = transactions.filter(x => x.creditGroup?.groupId === t.creditGroup.groupId);
+    const earliest = groupTxs.sort((a, b) => a.date.localeCompare(b.date))[0];
+    document.getElementById('tx-first-payment').value = earliest ? earliest.date.substring(0, 7) : t.date.substring(0, 7);
+  } else {
+    document.getElementById('tx-first-payment').value = t.date.substring(0, 7);
+  }
   document.getElementById('delete-btn').style.display = 'block';
   setTxType(t.type, true);
   setPayMethod(t.paymentMethod || 'cash');
@@ -1166,9 +1179,11 @@ async function saveTx() {
   if (payMethod === 'credit' && numInst > 1) {
     const groupId = crypto.randomUUID();
     const perAmt  = parseFloat((totalAmount / numInst).toFixed(2));
-    const [baseYear, baseMonth, baseDay] = date.split('-').map(Number);
+    const firstPaymentVal = document.getElementById('tx-first-payment').value || date.substring(0, 7);
+    const [fpYear, fpMonth] = firstPaymentVal.split('-').map(Number);
+    const baseYear = fpYear; const baseMonth = fpMonth; const baseDay = 1;
     const txList = Array.from({ length: numInst }, (_, i) => {
-      const mOffset = baseMonth - 1 + i;
+      const mOffset = (baseMonth - 1) + i;
       const yr = baseYear + Math.floor(mOffset / 12);
       const mo = mOffset % 12;
       const dy = Math.min(baseDay, new Date(yr, mo + 1, 0).getDate());
