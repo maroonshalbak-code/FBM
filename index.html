@@ -181,8 +181,8 @@ canvas { max-height: 200px; }
 </head>
 <body>
 
-<!-- ── SETUP SCREEN ─────────────────────────────────────────── -->
-<div id="screen-setup" class="full-screen">
+<!-- ── SETUP SCREEN (hidden — credentials are hardcoded) ──── -->
+<div id="screen-setup" class="full-screen hidden">
   <div class="brand"><div class="logo">💰</div><h1>תקציב ביתי</h1><p>חבר את Supabase כדי להתחיל</p></div>
   <div class="glass-card">
     <h2>הגדרת Supabase</h2>
@@ -505,16 +505,19 @@ function fmtAmt(n)   { return '₪' + Math.abs(n).toFixed(2).replace(/\B(?=(\d{3
 // ═══════════════════════════════════════════════════════════════
 // SUPABASE + AUTH
 // ═══════════════════════════════════════════════════════════════
+// ── Hardcoded Supabase config ──────────────────────────────
+const SUPABASE_URL = 'https://rgehvutzefddpvxmgwjt.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJnZWh2dXR6ZWZkZHB2eG1nd2p0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk2NDUyMDYsImV4cCI6MjEwNTIyMTIwNn0.dUfy69WyG7kQW7Sd2E9xiLltqyTD1eAbKdyDlXsBA5Q';
+
 let sb = null;
 let currentUser = null;
 
-function getConfig() { try { return JSON.parse(localStorage.getItem('sb_config')); } catch { return null; } }
-function saveConfig(url, key) { localStorage.setItem('sb_config', JSON.stringify({ url, key })); }
-function resetSetup() { showScreen('setup'); }
+function getConfig() { return { url: SUPABASE_URL, key: SUPABASE_KEY }; }
+function saveConfig() {}
+function resetSetup() {}
 
 async function boot() {
   const config = getConfig();
-  if (!config) { showScreen('setup'); return; }
   showScreen('loading');
   try {
     sb = supabase.createClient(config.url, config.key);
