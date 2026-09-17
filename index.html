@@ -1,0 +1,1216 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<title>ניהול תקציב ביתי</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#4f7eff">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="תקציב">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #f5f5f7; --card: #ffffff; --accent: #4f7eff; --accent2: #ff6b6b;
+  --green: #34c759; --orange: #ff9f0a; --text: #1c1c1e; --sub: #8e8e93;
+  --border: #e5e5ea; --radius: 16px; --nav-h: 70px;
+}
+body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; min-height: 100dvh; direction: rtl; }
+
+/* ── FULL SCREENS (setup / auth / loading) ── */
+.full-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100dvh; padding: 24px; }
+.full-screen.hidden { display: none; }
+.brand { text-align: center; margin-bottom: 36px; }
+.brand .logo { font-size: 52px; margin-bottom: 8px; }
+.brand h1 { font-size: 26px; font-weight: 800; }
+.brand p  { font-size: 14px; color: var(--sub); margin-top: 4px; }
+.glass-card { background: var(--card); border-radius: 24px; padding: 28px 24px; width: 100%; max-width: 420px; box-shadow: 0 8px 32px rgba(0,0,0,0.08); }
+.glass-card h2 { font-size: 20px; font-weight: 700; margin-bottom: 20px; }
+.field { margin-bottom: 16px; }
+.field label { font-size: 12px; font-weight: 600; color: var(--sub); display: block; margin-bottom: 6px; }
+.field input { width: 100%; padding: 13px 14px; border: 1.5px solid var(--border); border-radius: 12px; font-size: 16px; background: var(--bg); color: var(--text); outline: none; font-family: inherit; direction: ltr; text-align: left; }
+.field input:focus { border-color: var(--accent); }
+.field small { font-size: 12px; color: var(--sub); margin-top: 5px; display: block; direction: rtl; }
+.btn-main { width: 100%; padding: 14px; background: var(--accent); color: #fff; border: none; border-radius: 14px; font-size: 16px; font-weight: 700; cursor: pointer; font-family: inherit; transition: opacity 0.15s; }
+.btn-main:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-main:active { opacity: 0.85; }
+.btn-ghost { width: 100%; padding: 12px; background: none; color: var(--sub); border: none; font-size: 14px; cursor: pointer; margin-top: 8px; font-family: inherit; }
+.tab-row { display: flex; gap: 0; margin-bottom: 20px; border: 1.5px solid var(--border); border-radius: 12px; overflow: hidden; }
+.tab-row button { flex: 1; padding: 10px; border: none; background: none; font-size: 14px; font-weight: 600; cursor: pointer; color: var(--sub); font-family: inherit; transition: all 0.15s; }
+.tab-row button.active { background: var(--accent); color: #fff; }
+
+/* Spinner */
+.spinner-wrap { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.spinner { width: 44px; height: 44px; border: 4px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner-label { color: var(--sub); font-size: 15px; }
+
+/* ── NAV ── */
+nav { position: fixed; bottom: 0; left: 0; right: 0; height: var(--nav-h); background: rgba(255,255,255,0.95); backdrop-filter: blur(20px); border-top: 1px solid var(--border); display: flex; z-index: 100; padding-bottom: env(safe-area-inset-bottom); }
+nav button { flex: 1; background: none; border: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; cursor: pointer; color: var(--sub); font-size: 10px; font-weight: 500; transition: color 0.15s; padding: 8px 0 4px; font-family: inherit; }
+nav button.active { color: var(--accent); }
+nav button svg { width: 24px; height: 24px; }
+
+/* ── PAGES ── */
+.page { display: none; padding: 16px 16px calc(var(--nav-h) + 16px); min-height: 100dvh; }
+.page.active { display: block; }
+.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding-top: env(safe-area-inset-top, 8px); padding-top: max(env(safe-area-inset-top), 8px); }
+.page-header h1 { font-size: 26px; font-weight: 700; }
+.header-right { display: flex; align-items: center; gap: 10px; }
+.month-nav { display: flex; align-items: center; gap: 8px; flex-direction: row-reverse; }
+.month-nav button { background: var(--card); border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+.month-label { font-size: 14px; font-weight: 600; min-width: 100px; text-align: center; }
+.user-btn { background: none; border: none; cursor: pointer; font-size: 22px; padding: 2px; }
+
+/* ── CARDS ── */
+.card { background: var(--card); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.summary-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+.summary-card { background: var(--card); border-radius: var(--radius); padding: 14px 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.summary-card .label { font-size: 12px; color: var(--sub); font-weight: 500; margin-bottom: 4px; }
+.summary-card .amount { font-size: 22px; font-weight: 700; direction: ltr; text-align: right; }
+.summary-card.income .amount { color: var(--green); }
+.summary-card.expense .amount { color: var(--accent2); }
+.balance-card { background: linear-gradient(135deg, var(--accent), #7b5cff); border-radius: var(--radius); padding: 20px; color: #fff; margin-bottom: 12px; box-shadow: 0 4px 16px rgba(79,126,255,0.3); }
+.balance-card .label { font-size: 13px; opacity: 0.85; margin-bottom: 6px; }
+.balance-card .amount { font-size: 34px; font-weight: 800; direction: ltr; }
+.balance-card .month { font-size: 12px; opacity: 0.75; margin-top: 4px; }
+
+/* ── TRANSACTIONS ── */
+.tx-item { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
+.tx-item:last-child { border-bottom: none; }
+.tx-item:active { background: var(--bg); border-radius: 12px; }
+.tx-icon { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+.tx-info { flex: 1; min-width: 0; }
+.tx-name { font-size: 15px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tx-meta { font-size: 12px; color: var(--sub); margin-top: 2px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.tx-amount { font-size: 16px; font-weight: 600; flex-shrink: 0; direction: ltr; }
+.tx-amount.income { color: var(--green); }
+.tx-amount.expense { color: var(--text); }
+.section-title { font-size: 18px; font-weight: 700; margin-bottom: 12px; }
+
+/* ── FAB ── */
+.fab { position: fixed; bottom: calc(var(--nav-h) + 16px); left: 20px; width: 56px; height: 56px; background: var(--accent); border: none; border-radius: 50%; color: #fff; font-size: 28px; cursor: pointer; box-shadow: 0 4px 16px rgba(79,126,255,0.4); display: flex; align-items: center; justify-content: center; z-index: 99; transition: transform 0.15s; }
+.fab:active { transform: scale(0.94); }
+
+/* ── MODAL ── */
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; align-items: flex-end; }
+.modal-overlay.open { display: flex; }
+.modal { background: var(--card); border-radius: 24px 24px 0 0; padding: 24px 20px calc(env(safe-area-inset-bottom) + 24px); width: 100%; max-height: 88dvh; overflow-y: auto; animation: slideUp 0.25s ease; }
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.modal h2 { font-size: 20px; font-weight: 700; margin-bottom: 20px; }
+.form-group { margin-bottom: 16px; }
+.form-group label { font-size: 13px; font-weight: 600; color: var(--sub); display: block; margin-bottom: 6px; }
+.form-group input, .form-group select { width: 100%; padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 12px; font-size: 16px; background: var(--bg); color: var(--text); outline: none; -webkit-appearance: none; font-family: inherit; }
+.form-group input[type="number"], .form-group input[type="date"] { direction: ltr; text-align: right; }
+.form-group input:focus, .form-group select:focus { border-color: var(--accent); }
+.type-toggle { display: flex; gap: 8px; }
+.type-toggle button { flex: 1; padding: 10px; border: 2px solid var(--border); border-radius: 12px; background: none; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.15s; color: var(--sub); font-family: inherit; }
+.type-toggle button.active-expense { border-color: var(--accent2); background: #fff0f0; color: var(--accent2); }
+.type-toggle button.active-income  { border-color: var(--green);   background: #f0fff4; color: var(--green);   }
+.btn-primary { width: 100%; padding: 14px; background: var(--accent);  color: #fff; border: none; border-radius: 14px; font-size: 16px; font-weight: 700; cursor: pointer; margin-top: 8px; font-family: inherit; }
+.btn-danger  { width: 100%; padding: 14px; background: var(--accent2); color: #fff; border: none; border-radius: 14px; font-size: 16px; font-weight: 700; cursor: pointer; margin-top: 8px; font-family: inherit; }
+.btn-cancel  { width: 100%; padding: 12px; background: none; color: var(--sub); border: none; font-size: 15px; cursor: pointer; margin-top: 4px; font-family: inherit; }
+.pay-method-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pay-btn { padding: 10px 8px; border: 2px solid var(--border); border-radius: 12px; background: none; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--sub); font-family: inherit; text-align: center; }
+.pay-btn.active { border-color: var(--accent); background: #eef2ff; color: var(--accent); }
+.installment-group { display: none; }
+.installment-group.visible { display: block; }
+
+/* ── BUDGET ── */
+.budget-item { padding: 12px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
+.budget-item:last-child { border-bottom: none; }
+.budget-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.budget-cat { display: flex; align-items: center; gap: 8px; }
+.budget-amounts { font-size: 13px; color: var(--sub); direction: ltr; }
+.budget-amounts span { font-weight: 600; color: var(--text); }
+.progress-bar { height: 6px; background: var(--border); border-radius: 99px; overflow: hidden; }
+.progress-fill { height: 100%; border-radius: 99px; transition: width 0.4s ease; }
+.progress-fill.ok   { background: var(--green);   }
+.progress-fill.warn { background: var(--orange);  }
+.progress-fill.over { background: var(--accent2); }
+
+/* ── RECURRING ── */
+.rec-item { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
+.rec-item:last-child { border-bottom: none; }
+
+/* ── BADGES ── */
+.rec-badge   { font-size: 11px; padding: 2px 7px; border-radius: 99px; font-weight: 600; background: #eef2ff; color: var(--accent); }
+.credit-badge { font-size: 11px; padding: 2px 7px; border-radius: 99px; font-weight: 700; background: #eef2ff; color: var(--accent); }
+.pay-badge { font-size: 11px; padding: 2px 7px; border-radius: 99px; font-weight: 600; }
+.pay-badge.cash   { background: #f0fff4; color: #28a745; }
+.pay-badge.bank   { background: #fff8e1; color: #f59e0b; }
+.pay-badge.credit { background: #eef2ff; color: var(--accent); }
+.pay-badge.loan   { background: #fff0f0; color: var(--accent2); }
+
+/* ── CHART ── */
+.chart-wrap { position: relative; height: 200px; }
+canvas { max-height: 200px; }
+
+/* ── FILTER ── */
+.filter-bar { display: flex; gap: 8px; margin-bottom: 16px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; flex-direction: row-reverse; }
+.filter-bar::-webkit-scrollbar { display: none; }
+.filter-chip { padding: 6px 14px; border-radius: 99px; border: 1.5px solid var(--border); background: var(--card); font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; color: var(--sub); flex-shrink: 0; font-family: inherit; }
+.filter-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* ── EMPTY ── */
+.empty { text-align: center; padding: 48px 20px; color: var(--sub); }
+.empty .icon { font-size: 48px; margin-bottom: 12px; }
+.empty p { font-size: 15px; }
+
+/* ── TOAST ── */
+#toast { position: fixed; top: 16px; left: 50%; transform: translateX(-50%) translateY(-80px); background: #1c1c1e; color: #fff; padding: 12px 20px; border-radius: 14px; font-size: 14px; z-index: 9999; transition: transform 0.25s ease; white-space: nowrap; max-width: calc(100vw - 32px); text-align: center; direction: rtl; }
+#toast.show { transform: translateX(-50%) translateY(0); }
+#toast.error { background: var(--accent2); }
+#toast.success { background: var(--green); }
+
+/* ── USER MENU ── */
+.user-menu { position: fixed; inset: 0; z-index: 300; display: none; }
+.user-menu.open { display: block; }
+.user-menu-backdrop { position: absolute; inset: 0; }
+.user-menu-panel { position: absolute; top: max(env(safe-area-inset-top), 8px); left: 16px; background: var(--card); border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.15); padding: 16px; min-width: 220px; animation: fadeIn 0.15s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+.user-email { font-size: 13px; color: var(--sub); margin-bottom: 12px; word-break: break-all; }
+.user-menu-btn { width: 100%; padding: 10px 14px; background: none; border: 1.5px solid var(--border); border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; color: var(--accent2); font-family: inherit; text-align: center; }
+</style>
+</head>
+<body>
+
+<!-- ── SETUP SCREEN ─────────────────────────────────────────── -->
+<div id="screen-setup" class="full-screen">
+  <div class="brand"><div class="logo">💰</div><h1>תקציב ביתי</h1><p>חבר את Supabase כדי להתחיל</p></div>
+  <div class="glass-card">
+    <h2>הגדרת Supabase</h2>
+    <div class="field">
+      <label>SUPABASE PROJECT URL</label>
+      <input type="url" id="setup-url" placeholder="https://xxxx.supabase.co" autocomplete="off">
+      <small>Project Settings → API → Project URL</small>
+    </div>
+    <div class="field">
+      <label>ANON PUBLIC KEY</label>
+      <input type="text" id="setup-key" placeholder="eyJhbGciOiJIUzI1NiIs..." autocomplete="off">
+      <small>Project Settings → API → anon public</small>
+    </div>
+    <button class="btn-main" onclick="connectSupabase()">התחבר לSupabase</button>
+    <button class="btn-ghost" onclick="openSchemaHelp()">📋 איך מגדירים? (הצג SQL)</button>
+  </div>
+</div>
+
+<!-- ── AUTH SCREEN ───────────────────────────────────────────── -->
+<div id="screen-auth" class="full-screen hidden">
+  <div class="brand"><div class="logo">💰</div><h1>תקציב ביתי</h1></div>
+  <div class="glass-card">
+    <div class="tab-row">
+      <button id="auth-login-btn" class="active" onclick="setAuthMode('login')">כניסה</button>
+      <button id="auth-signup-btn" onclick="setAuthMode('signup')">הרשמה</button>
+    </div>
+    <div class="field">
+      <label>אימייל</label>
+      <input type="email" id="auth-email" placeholder="you@example.com" autocomplete="email">
+    </div>
+    <div class="field">
+      <label>סיסמה</label>
+      <input type="password" id="auth-pass" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')submitAuth()">
+    </div>
+    <button class="btn-main" id="auth-submit" onclick="submitAuth()">כניסה</button>
+    <button class="btn-ghost" onclick="showForgot()">שכחתי סיסמה</button>
+    <button class="btn-ghost" style="font-size:12px;color:var(--sub)" onclick="resetSetup()">שנה הגדרות Supabase</button>
+  </div>
+</div>
+
+<!-- ── LOADING SCREEN ────────────────────────────────────────── -->
+<div id="screen-loading" class="full-screen hidden">
+  <div class="spinner-wrap">
+    <div class="spinner"></div>
+    <div class="spinner-label" id="loading-label">טוען...</div>
+  </div>
+</div>
+
+<!-- ── MAIN APP ──────────────────────────────────────────────── -->
+<div id="screen-app" style="display:none">
+
+  <!-- Home page -->
+  <div class="page active" id="page-home">
+    <div class="page-header">
+      <h1>סקירה כללית</h1>
+      <div class="header-right">
+        <div class="month-nav">
+          <button onclick="changeMonth(1)">›</button>
+          <span class="month-label" id="month-label-home"></span>
+          <button onclick="changeMonth(-1)">‹</button>
+        </div>
+        <button class="user-btn" onclick="toggleUserMenu()">👤</button>
+      </div>
+    </div>
+    <div class="balance-card">
+      <div class="label">יתרה נוכחית</div>
+      <div class="amount" id="balance-amount">₪0.00</div>
+      <div class="month" id="balance-month"></div>
+    </div>
+    <div class="summary-row">
+      <div class="summary-card income"><div class="label">הכנסות</div><div class="amount" id="total-income">₪0</div></div>
+      <div class="summary-card expense"><div class="label">הוצאות</div><div class="amount" id="total-expense">₪0</div></div>
+    </div>
+    <div class="card">
+      <div class="section-title">הוצאות לפי קטגוריה</div>
+      <div class="chart-wrap"><canvas id="donut-chart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="section-title">עסקאות אחרונות</div>
+      <div id="recent-tx-list"></div>
+    </div>
+  </div>
+
+  <!-- Transactions page -->
+  <div class="page" id="page-tx">
+    <div class="page-header">
+      <h1>עסקאות</h1>
+      <div class="month-nav">
+        <button onclick="changeMonth(1)">›</button>
+        <span class="month-label" id="month-label-tx"></span>
+        <button onclick="changeMonth(-1)">‹</button>
+      </div>
+    </div>
+    <div class="filter-bar" id="filter-bar"></div>
+    <div class="card"><div id="tx-list"></div></div>
+  </div>
+
+  <!-- Budget page -->
+  <div class="page" id="page-budget">
+    <div class="page-header">
+      <h1>תקציב</h1>
+      <div class="month-nav">
+        <button onclick="changeMonth(1)">›</button>
+        <span class="month-label" id="month-label-budget"></span>
+        <button onclick="changeMonth(-1)">‹</button>
+      </div>
+    </div>
+    <div class="card" id="budget-list"></div>
+  </div>
+
+  <!-- Recurring page -->
+  <div class="page" id="page-recurring">
+    <div class="page-header">
+      <h1>תשלומים קבועים</h1>
+      <button class="fab" style="position:relative;bottom:auto;left:auto;width:36px;height:36px;font-size:22px;box-shadow:none;" onclick="openRecurringModal()">+</button>
+    </div>
+    <div class="card" id="recurring-list"></div>
+  </div>
+
+  <!-- Bottom nav -->
+  <nav>
+    <button onclick="showPage('recurring')" id="nav-recurring">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+      קבועים
+    </button>
+    <button onclick="showPage('budget')" id="nav-budget">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      תקציב
+    </button>
+    <button onclick="showPage('tx')" id="nav-tx">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      עסקאות
+    </button>
+    <button class="active" onclick="showPage('home')" id="nav-home">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>
+      בית
+    </button>
+  </nav>
+
+  <button class="fab" id="fab" onclick="openAddModal()">+</button>
+
+  <!-- Transaction modal -->
+  <div class="modal-overlay" id="tx-modal">
+    <div class="modal">
+      <h2 id="tx-modal-title">הוסף עסקה</h2>
+      <div class="form-group">
+        <label>סוג</label>
+        <div class="type-toggle">
+          <button id="btn-expense" class="active-expense" onclick="setTxType('expense')">הוצאה</button>
+          <button id="btn-income" onclick="setTxType('income')">הכנסה</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>סכום (₪)</label>
+        <input type="number" id="tx-amount" placeholder="0.00" inputmode="decimal" step="0.01" min="0">
+      </div>
+      <div class="form-group">
+        <label>תיאור</label>
+        <input type="text" id="tx-name" placeholder="לדוגמה: קניות בסופר">
+      </div>
+      <div class="form-group">
+        <label>קטגוריה</label>
+        <select id="tx-category"></select>
+      </div>
+      <div class="form-group">
+        <label>תאריך</label>
+        <input type="date" id="tx-date">
+      </div>
+      <div class="form-group" id="pay-method-group">
+        <label>אמצעי תשלום</label>
+        <div class="pay-method-grid">
+          <button class="pay-btn active" data-pay="credit" onclick="setPayMethod('credit')">💳 כרטיס אשראי</button>
+          <button class="pay-btn" data-pay="cash"   onclick="setPayMethod('cash')">💵 מזומן</button>
+          <button class="pay-btn" data-pay="bank"   onclick="setPayMethod('bank')">🏦 העברה בנקאית</button>
+          <button class="pay-btn" data-pay="loan"   onclick="setPayMethod('loan')">📋 הלוואה</button>
+        </div>
+      </div>
+      <div class="form-group installment-group visible" id="installment-group">
+        <label>מספר תשלומים</label>
+        <input type="number" id="tx-installments" value="1" min="1" max="120" inputmode="numeric">
+        <p style="font-size:12px;color:var(--sub);margin-top:6px;" id="installment-hint"></p>
+      </div>
+      <button class="btn-primary" id="tx-save-btn" onclick="saveTx()">שמור</button>
+      <button class="btn-danger" id="delete-btn" style="display:none" onclick="deleteTx()">מחק</button>
+      <button class="btn-cancel" onclick="closeModal('tx-modal')">ביטול</button>
+    </div>
+  </div>
+
+  <!-- Budget modal -->
+  <div class="modal-overlay" id="budget-modal">
+    <div class="modal">
+      <h2>הגדרת יעד תקציב</h2>
+      <div class="form-group"><label>קטגוריה</label><select id="budget-cat-select"></select></div>
+      <div class="form-group"><label>תקרה חודשית (₪)</label><input type="number" id="budget-limit" placeholder="0" inputmode="decimal" min="0"></div>
+      <button class="btn-primary" id="budget-save-btn" onclick="saveBudget()">שמור</button>
+      <button class="btn-cancel" onclick="closeModal('budget-modal')">ביטול</button>
+    </div>
+  </div>
+
+  <!-- Recurring modal -->
+  <div class="modal-overlay" id="recurring-modal">
+    <div class="modal">
+      <h2 id="rec-modal-title">הוסף תשלום קבוע</h2>
+      <div class="form-group">
+        <label>סוג</label>
+        <div class="type-toggle">
+          <button id="rbtn-expense" class="active-expense" onclick="setRecType('expense')">הוצאה</button>
+          <button id="rbtn-income" onclick="setRecType('income')">הכנסה</button>
+        </div>
+      </div>
+      <div class="form-group"><label>סכום (₪)</label><input type="number" id="rec-amount" placeholder="0.00" inputmode="decimal" step="0.01" min="0"></div>
+      <div class="form-group"><label>תיאור</label><input type="text" id="rec-name" placeholder="לדוגמה: נטפליקס"></div>
+      <div class="form-group"><label>קטגוריה</label><select id="rec-category"></select></div>
+      <div class="form-group">
+        <label>תדירות</label>
+        <select id="rec-freq"><option value="monthly">חודשי</option><option value="weekly">שבועי</option><option value="yearly">שנתי</option></select>
+      </div>
+      <div class="form-group"><label>יום בחודש</label><input type="number" id="rec-day" placeholder="1" min="1" max="31" value="1"></div>
+      <button class="btn-primary" id="rec-save-btn" onclick="saveRecurring()">שמור</button>
+      <button class="btn-danger" id="rec-delete-btn" style="display:none" onclick="deleteRecurring()">מחק</button>
+      <button class="btn-cancel" onclick="closeModal('recurring-modal')">ביטול</button>
+    </div>
+  </div>
+
+</div><!-- /screen-app -->
+
+<!-- User menu (outside app div, always rendered) -->
+<div class="user-menu" id="user-menu">
+  <div class="user-menu-backdrop" onclick="toggleUserMenu()"></div>
+  <div class="user-menu-panel">
+    <div class="user-email" id="user-email-display"></div>
+    <button class="user-menu-btn" onclick="signOut()">יציאה מהחשבון</button>
+  </div>
+</div>
+
+<!-- Schema help modal -->
+<div class="modal-overlay" id="schema-modal">
+  <div class="modal">
+    <h2>📋 הגדרת Supabase</h2>
+    <p style="font-size:14px;color:var(--sub);margin-bottom:12px;">הרץ את הSQL הבא ב-Supabase SQL Editor:</p>
+    <textarea id="schema-text" readonly style="width:100%;height:180px;padding:12px;border:1.5px solid var(--border);border-radius:12px;font-size:11px;font-family:monospace;background:var(--bg);direction:ltr;resize:none;"></textarea>
+    <button class="btn-primary" onclick="copySchema()">העתק SQL</button>
+    <button class="btn-cancel" onclick="closeModal('schema-modal')">סגור</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════════════════════════════════
+const CATS = [
+  { id:'housing',       name:'דיור',       icon:'🏠', color:'#4f7eff' },
+  { id:'food',          name:'אוכל',        icon:'🍔', color:'#ff9f0a' },
+  { id:'transport',     name:'תחבורה',      icon:'🚗', color:'#34c759' },
+  { id:'entertainment', name:'בילויים',     icon:'🎬', color:'#bf5af2' },
+  { id:'health',        name:'בריאות',      icon:'💊', color:'#ff6b6b' },
+  { id:'shopping',      name:'קניות',       icon:'🛍️', color:'#30d158' },
+  { id:'bills',         name:'חשבונות',     icon:'⚡', color:'#ffd60a' },
+  { id:'savings',       name:'חסכונות',     icon:'💰', color:'#5ac8fa' },
+  { id:'other',         name:'אחר',         icon:'📦', color:'#8e8e93' },
+  { id:'income',        name:'הכנסה',       icon:'💵', color:'#34c759' },
+];
+const FREQ_LABELS = { monthly:'חודשי', weekly:'שבועי', yearly:'שנתי' };
+const PAY_LABELS  = { credit:'💳 אשראי', cash:'💵 מזומן', bank:'🏦 בנק', loan:'📋 הלוואה' };
+const PAY_CLASSES = { credit:'credit', cash:'cash', bank:'bank', loan:'loan' };
+const SCHEMA_SQL = `-- Run this in Supabase SQL Editor
+
+create table if not exists public.transactions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade not null,
+  name text not null,
+  amount numeric(10,2) not null,
+  category text not null,
+  type text not null,
+  date date not null,
+  payment_method text,
+  credit_group_id text,
+  credit_current integer,
+  credit_total integer,
+  recurring_id uuid,
+  created_at timestamptz default now()
+);
+
+create table if not exists public.budgets (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade not null,
+  category text not null,
+  limit_amount numeric(10,2) not null,
+  unique(user_id, category)
+);
+
+create table if not exists public.recurring (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade not null,
+  name text not null,
+  amount numeric(10,2) not null,
+  category text not null,
+  type text not null,
+  freq text not null default 'monthly',
+  day integer default 1,
+  created_at timestamptz default now()
+);
+
+alter table public.transactions enable row level security;
+alter table public.budgets enable row level security;
+alter table public.recurring enable row level security;
+
+create policy "own_transactions" on public.transactions
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "own_budgets" on public.budgets
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "own_recurring" on public.recurring
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);`;
+
+function catById(id) { return CATS.find(c => c.id === id) || CATS[CATS.length - 2]; }
+function fmtAmt(n)   { return '₪' + Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+
+// ═══════════════════════════════════════════════════════════════
+// SUPABASE + AUTH
+// ═══════════════════════════════════════════════════════════════
+let sb = null;
+let currentUser = null;
+
+function getConfig() { try { return JSON.parse(localStorage.getItem('sb_config')); } catch { return null; } }
+function saveConfig(url, key) { localStorage.setItem('sb_config', JSON.stringify({ url, key })); }
+function resetSetup() { showScreen('setup'); }
+
+async function boot() {
+  const config = getConfig();
+  if (!config) { showScreen('setup'); return; }
+  showScreen('loading');
+  try {
+    sb = supabase.createClient(config.url, config.key);
+    const { data: { session } } = await sb.auth.getSession();
+    if (session?.user) {
+      currentUser = session.user;
+      await loadData();
+      showScreen('app');
+    } else {
+      showScreen('auth');
+    }
+    sb.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        currentUser = session.user;
+        showScreen('loading');
+        await loadData();
+        showScreen('app');
+        document.getElementById('user-email-display').textContent = currentUser.email;
+      } else if (event === 'SIGNED_OUT') {
+        currentUser = null; transactions = []; budgets = {}; recurring = [];
+        showScreen('auth');
+      }
+    });
+  } catch (e) {
+    showScreen('setup');
+    toast('שגיאת חיבור: ' + e.message, 'error');
+  }
+}
+
+async function connectSupabase() {
+  const url = document.getElementById('setup-url').value.trim();
+  const key = document.getElementById('setup-key').value.trim();
+  if (!url || !key) return toast('נא להזין URL ומפתח', 'error');
+  showScreen('loading');
+  try {
+    sb = supabase.createClient(url, key);
+    await sb.auth.getSession(); // validate credentials
+    saveConfig(url, key);
+    showScreen('auth');
+  } catch (e) {
+    showScreen('setup');
+    toast('חיבור נכשל – בדוק URL ומפתח', 'error');
+  }
+}
+
+let authMode = 'login';
+function setAuthMode(mode) {
+  authMode = mode;
+  document.getElementById('auth-login-btn').classList.toggle('active', mode === 'login');
+  document.getElementById('auth-signup-btn').classList.toggle('active', mode === 'signup');
+  document.getElementById('auth-submit').textContent = mode === 'login' ? 'כניסה' : 'הרשמה';
+}
+
+async function submitAuth() {
+  const email = document.getElementById('auth-email').value.trim();
+  const pass  = document.getElementById('auth-pass').value;
+  if (!email || !pass) return toast('נא למלא אימייל וסיסמה', 'error');
+  setLoading('auth-submit', true);
+  let error;
+  if (authMode === 'login') {
+    ({ error } = await sb.auth.signInWithPassword({ email, password: pass }));
+  } else {
+    ({ error } = await sb.auth.signUp({ email, password: pass }));
+    if (!error) { toast('נשלח אימייל אימות – בדוק את תיבת הדואר שלך', 'success'); setLoading('auth-submit', false); return; }
+  }
+  if (error) { toast(error.message, 'error'); setLoading('auth-submit', false); }
+}
+
+async function showForgot() {
+  const email = document.getElementById('auth-email').value.trim();
+  if (!email) return toast('הזן אימייל לאיפוס סיסמה', 'error');
+  const { error } = await sb.auth.resetPasswordForEmail(email);
+  if (error) toast(error.message, 'error');
+  else toast('נשלח קישור לאיפוס סיסמה', 'success');
+}
+
+async function signOut() {
+  toggleUserMenu();
+  await sb.auth.signOut();
+}
+
+function showScreen(name) {
+  document.getElementById('screen-setup').classList.toggle('hidden', name !== 'setup');
+  document.getElementById('screen-auth').classList.toggle('hidden', name !== 'auth');
+  document.getElementById('screen-loading').classList.toggle('hidden', name !== 'loading');
+  document.getElementById('screen-app').style.display = name === 'app' ? '' : 'none';
+  if (name === 'app' && currentUser) {
+    document.getElementById('user-email-display').textContent = currentUser.email;
+  }
+}
+
+function toggleUserMenu() {
+  document.getElementById('user-menu').classList.toggle('open');
+}
+
+function openSchemaHelp() {
+  document.getElementById('schema-text').value = SCHEMA_SQL;
+  document.getElementById('schema-modal').classList.add('open');
+}
+
+function copySchema() {
+  navigator.clipboard.writeText(SCHEMA_SQL).then(() => toast('הועתק!', 'success'));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DATA LAYER (Supabase)
+// ═══════════════════════════════════════════════════════════════
+let transactions = [];
+let budgets = {};
+let recurring = [];
+let currentMonth = new Date().getMonth();
+let currentYear  = new Date().getFullYear();
+
+function rowToTx(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    amount: parseFloat(row.amount),
+    category: row.category,
+    type: row.type,
+    date: (row.date || '').substring(0, 10),
+    paymentMethod: row.payment_method,
+    recurringId: row.recurring_id,
+    creditGroup: row.credit_group_id
+      ? { groupId: row.credit_group_id, current: row.credit_current, total: row.credit_total }
+      : null
+  };
+}
+
+function txToRow(tx) {
+  return {
+    user_id: currentUser.id,
+    name: tx.name, amount: tx.amount, category: tx.category, type: tx.type, date: tx.date,
+    payment_method:  tx.paymentMethod || null,
+    recurring_id:    tx.recurringId   || null,
+    credit_group_id: tx.creditGroup?.groupId  || null,
+    credit_current:  tx.creditGroup?.current  || null,
+    credit_total:    tx.creditGroup?.total    || null
+  };
+}
+
+function rowToRec(row) {
+  return { id: row.id, name: row.name, amount: parseFloat(row.amount), category: row.category, type: row.type, freq: row.freq, day: row.day };
+}
+
+async function loadData() {
+  setLoadingLabel('טוען נתונים...');
+  const uid = currentUser.id;
+  const [txRes, budRes, recRes] = await Promise.all([
+    sb.from('transactions').select('*').eq('user_id', uid).order('date', { ascending: false }),
+    sb.from('budgets').select('*').eq('user_id', uid),
+    sb.from('recurring').select('*').eq('user_id', uid).order('created_at')
+  ]);
+  if (txRes.error)  toast(txRes.error.message,  'error');
+  if (budRes.error) toast(budRes.error.message, 'error');
+  if (recRes.error) toast(recRes.error.message, 'error');
+  transactions = (txRes.data  || []).map(rowToTx);
+  budgets      = Object.fromEntries((budRes.data || []).map(b => [b.category, parseFloat(b.limit_amount)]));
+  recurring    = (recRes.data || []).map(rowToRec);
+  await applyRecurring();
+}
+
+async function applyRecurring() {
+  if (!recurring.length) return;
+  const key = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
+  const toInsert = [];
+  for (const r of recurring) {
+    const exists = transactions.some(t => t.recurringId === r.id && t.date.startsWith(key));
+    if (!exists) {
+      let day = Math.min(r.day || 1, new Date(currentYear, currentMonth + 1, 0).getDate());
+      toInsert.push({
+        user_id: currentUser.id, name: r.name, amount: r.amount,
+        category: r.category, type: r.type,
+        date: `${key}-${String(day).padStart(2, '0')}`,
+        recurring_id: r.id, payment_method: 'bank',
+        credit_group_id: null, credit_current: null, credit_total: null
+      });
+    }
+  }
+  if (toInsert.length) {
+    const { data, error } = await sb.from('transactions').insert(toInsert).select();
+    if (!error && data) transactions = [...transactions, ...data.map(rowToTx)];
+  }
+}
+
+async function dbInsertTxs(txList) {
+  const { data, error } = await sb.from('transactions').insert(txList.map(txToRow)).select();
+  if (error) { toast(error.message, 'error'); return false; }
+  transactions = [...transactions, ...data.map(rowToTx)];
+  return true;
+}
+
+async function dbUpdateTx(id, patch) {
+  const rowPatch = {};
+  if (patch.name !== undefined)          rowPatch.name           = patch.name;
+  if (patch.amount !== undefined)        rowPatch.amount         = patch.amount;
+  if (patch.date !== undefined)          rowPatch.date           = patch.date;
+  if (patch.category !== undefined)      rowPatch.category       = patch.category;
+  if (patch.type !== undefined)          rowPatch.type           = patch.type;
+  if (patch.paymentMethod !== undefined) rowPatch.payment_method = patch.paymentMethod;
+  const { error } = await sb.from('transactions').update(rowPatch).eq('id', id).eq('user_id', currentUser.id);
+  if (error) { toast(error.message, 'error'); return false; }
+  transactions = transactions.map(t => t.id === id ? { ...t, ...patch } : t);
+  return true;
+}
+
+async function dbDeleteTxs(ids) {
+  if (!ids.length) return;
+  const { error } = await sb.from('transactions').delete().in('id', ids).eq('user_id', currentUser.id);
+  if (error) { toast(error.message, 'error'); return; }
+  transactions = transactions.filter(t => !ids.includes(t.id));
+}
+
+async function dbUpsertBudget(catId, limit) {
+  if (limit <= 0) {
+    const { error } = await sb.from('budgets').delete().eq('user_id', currentUser.id).eq('category', catId);
+    if (error) { toast(error.message, 'error'); return; }
+    delete budgets[catId];
+  } else {
+    const { error } = await sb.from('budgets')
+      .upsert({ user_id: currentUser.id, category: catId, limit_amount: limit }, { onConflict: 'user_id,category' });
+    if (error) { toast(error.message, 'error'); return; }
+    budgets[catId] = limit;
+  }
+}
+
+async function dbInsertRecurring(rec) {
+  const { data, error } = await sb.from('recurring')
+    .insert({ user_id: currentUser.id, name: rec.name, amount: rec.amount, category: rec.category, type: rec.type, freq: rec.freq, day: rec.day })
+    .select();
+  if (error) { toast(error.message, 'error'); return null; }
+  const newRec = rowToRec(data[0]);
+  recurring = [...recurring, newRec];
+  return newRec;
+}
+
+async function dbUpdateRecurring(id, fields) {
+  const { error } = await sb.from('recurring').update(fields).eq('id', id).eq('user_id', currentUser.id);
+  if (error) { toast(error.message, 'error'); return false; }
+  recurring = recurring.map(r => r.id === id ? { ...r, ...fields } : r);
+  return true;
+}
+
+async function dbDeleteRecurring(id) {
+  const { error } = await sb.from('recurring').delete().eq('id', id).eq('user_id', currentUser.id);
+  if (error) { toast(error.message, 'error'); return; }
+  recurring = recurring.filter(r => r.id !== id);
+  const orphanIds = transactions.filter(t => t.recurringId === id).map(t => t.id);
+  await dbDeleteTxs(orphanIds);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// APP STATE
+// ═══════════════════════════════════════════════════════════════
+let editingTxId = null;
+let editingRecId = null;
+let txType = 'expense';
+let recType = 'expense';
+let filterCat = 'all';
+let currentPayMethod = 'credit';
+
+function monthTxs() {
+  const key = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
+  return transactions.filter(t => t.date.startsWith(key));
+}
+
+function monthLabel(y, m) {
+  return new Date(y, m, 1).toLocaleDateString('he-IL', { month: 'long', year: 'numeric' });
+}
+
+async function changeMonth(dir) {
+  currentMonth += dir;
+  if (currentMonth > 11) { currentMonth = 0; currentYear++; }
+  if (currentMonth < 0)  { currentMonth = 11; currentYear--; }
+  await applyRecurring();
+  renderAll();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INIT UI
+// ═══════════════════════════════════════════════════════════════
+function initUI() {
+  populateSelects();
+  renderAll();
+}
+
+function populateSelects() {
+  const expCats = CATS.filter(c => c.id !== 'income');
+  ['tx-category', 'budget-cat-select', 'rec-category'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    sel.innerHTML = '';
+    expCats.forEach(c => sel.insertAdjacentHTML('beforeend', `<option value="${c.id}">${c.icon} ${c.name}</option>`));
+  });
+  const fb = document.getElementById('filter-bar');
+  fb.innerHTML = `<button class="filter-chip active" data-cat="all" onclick="setFilter('all')">הכל</button>`;
+  CATS.forEach(c => fb.insertAdjacentHTML('beforeend', `<button class="filter-chip" data-cat="${c.id}" onclick="setFilter('${c.id}')">${c.icon} ${c.name}</button>`));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PAGES
+// ═══════════════════════════════════════════════════════════════
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  document.getElementById('nav-' + name).classList.add('active');
+  const fab = document.getElementById('fab');
+  if (name === 'home' || name === 'recurring') fab.style.display = 'none';
+  else if (name === 'budget') { fab.style.display = 'flex'; fab.onclick = openBudgetModal; fab.textContent = '+'; }
+  else { fab.style.display = 'flex'; fab.onclick = openAddModal; fab.textContent = '+'; }
+  renderAll();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════════════════════
+let donutChart = null;
+function renderAll() {
+  const label = monthLabel(currentYear, currentMonth);
+  ['home', 'tx', 'budget'].forEach(p => {
+    const el = document.getElementById(`month-label-${p}`);
+    if (el) el.textContent = label;
+  });
+
+  const txs     = monthTxs();
+  const income  = txs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+  const expense = txs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const balance = income - expense;
+
+  document.getElementById('balance-amount').textContent = (balance < 0 ? '-' : '') + fmtAmt(balance);
+  document.getElementById('balance-month').textContent  = label;
+  document.getElementById('total-income').textContent   = fmtAmt(income);
+  document.getElementById('total-expense').textContent  = fmtAmt(expense);
+
+  // Donut chart
+  const expCats = CATS.filter(c => c.id !== 'income');
+  const catTotals = expCats.map(c => ({
+    ...c,
+    total: txs.filter(t => t.type === 'expense' && t.category === c.id).reduce((s, t) => s + t.amount, 0)
+  })).filter(c => c.total > 0);
+
+  const ctx = document.getElementById('donut-chart').getContext('2d');
+  if (donutChart) donutChart.destroy();
+  if (catTotals.length) {
+    donutChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: catTotals.map(c => c.icon + ' ' + c.name),
+        datasets: [{ data: catTotals.map(c => c.total), backgroundColor: catTotals.map(c => c.color), borderWidth: 0, hoverOffset: 4 }]
+      },
+      options: { cutout: '68%', plugins: { legend: { position: 'left', labels: { boxWidth: 12, font: { size: 11 }, padding: 8 } } }, animation: { animateScale: true } }
+    });
+  } else {
+    ctx.clearRect(0, 0, 300, 200);
+    donutChart = null;
+  }
+
+  // Recent transactions
+  const recent = [...txs].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
+  document.getElementById('recent-tx-list').innerHTML = recent.length
+    ? recent.map(t => txHTML(t)).join('')
+    : '<div class="empty"><div class="icon">💸</div><p>אין עסקאות עדיין</p></div>';
+
+  // Full tx list
+  const filtered = [...txs]
+    .filter(t => filterCat === 'all' || t.category === filterCat || (filterCat === 'income' && t.type === 'income'))
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+  document.getElementById('tx-list').innerHTML = filtered.length
+    ? filtered.map(t => txHTML(t, true)).join('')
+    : '<div class="empty"><div class="icon">📂</div><p>אין עסקאות</p></div>';
+
+  // Budget
+  document.getElementById('budget-list').innerHTML = expCats.map(c => {
+    const spent = txs.filter(t => t.type === 'expense' && t.category === c.id).reduce((s, t) => s + t.amount, 0);
+    const limit = budgets[c.id] || 0;
+    const pct = limit > 0 ? Math.min((spent / limit) * 100, 100) : 0;
+    const cls = pct >= 100 ? 'over' : pct >= 80 ? 'warn' : 'ok';
+    return `<div class="budget-item" onclick="openBudgetModal('${c.id}')">
+      <div class="budget-row">
+        <div class="budget-cat"><span style="font-size:18px">${c.icon}</span><span style="font-size:15px;font-weight:500">${c.name}</span></div>
+        <div class="budget-amounts">${fmtAmt(spent)} / <span>${limit > 0 ? fmtAmt(limit) : 'ללא הגבלה'}</span></div>
+      </div>
+      ${limit > 0 ? `<div class="progress-bar"><div class="progress-fill ${cls}" style="width:${pct}%"></div></div>` : ''}
+    </div>`;
+  }).join('');
+
+  // Recurring
+  document.getElementById('recurring-list').innerHTML = recurring.length
+    ? recurring.map(r => {
+        const c = catById(r.category);
+        return `<div class="rec-item" onclick="openRecurringModal('${r.id}')">
+          <div class="tx-icon" style="background:${c.color}22">${c.icon}</div>
+          <div class="tx-info">
+            <div class="tx-name">${r.name}</div>
+            <div class="tx-meta"><span class="rec-badge">${FREQ_LABELS[r.freq] || r.freq}</span> · יום ${r.day || 1}</div>
+          </div>
+          <div class="tx-amount ${r.type}">${r.type === 'expense' ? '-' : '+'}${fmtAmt(r.amount)}</div>
+        </div>`;
+      }).join('')
+    : '<div class="empty"><div class="icon">🔄</div><p>אין תשלומים קבועים עדיין</p></div>';
+}
+
+function txHTML(t, clickable) {
+  const c  = t.type === 'income' ? catById('income') : catById(t.category);
+  const d  = new Date(t.date + 'T00:00:00').toLocaleDateString('he-IL', { month: 'short', day: 'numeric' });
+  const ri = t.recurringId ? ' 🔄' : '';
+  const click = clickable ? `onclick="openEditModal('${t.id}')"` : '';
+  let badge = '';
+  if (t.type === 'expense') {
+    if (t.creditGroup) badge = `<span class="credit-badge">💳 ${t.creditGroup.current}/${t.creditGroup.total}</span>`;
+    else if (t.paymentMethod && t.paymentMethod !== 'credit') badge = `<span class="pay-badge ${PAY_CLASSES[t.paymentMethod]}">${PAY_LABELS[t.paymentMethod]}</span>`;
+  }
+  return `<div class="tx-item" ${click}>
+    <div class="tx-icon" style="background:${c.color}22">${c.icon}</div>
+    <div class="tx-info">
+      <div class="tx-name">${t.name}${ri}</div>
+      <div class="tx-meta">${badge}<span>${c.name} · ${d}</span></div>
+    </div>
+    <div class="tx-amount ${t.type}">${t.type === 'expense' ? '-' : '+'}${fmtAmt(t.amount)}</div>
+  </div>`;
+}
+
+function setFilter(f) {
+  filterCat = f;
+  document.querySelectorAll('.filter-chip').forEach(el => el.classList.toggle('active', el.dataset.cat === f));
+  renderAll();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TRANSACTION MODAL
+// ═══════════════════════════════════════════════════════════════
+function openAddModal() {
+  editingTxId = null;
+  document.getElementById('tx-modal-title').textContent = 'הוסף עסקה';
+  document.getElementById('tx-amount').value = '';
+  document.getElementById('tx-name').value = '';
+  document.getElementById('tx-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('delete-btn').style.display = 'none';
+  document.getElementById('tx-installments').value = 1;
+  document.getElementById('installment-hint').textContent = '';
+  setTxType('expense');
+  setPayMethod('credit');
+  document.getElementById('tx-modal').classList.add('open');
+}
+
+function openEditModal(id) {
+  const t = transactions.find(tx => tx.id === id);
+  if (!t) return;
+  editingTxId = t.id;
+  document.getElementById('tx-modal-title').textContent = 'ערוך עסקה';
+  const dispAmount = t.creditGroup ? (t.amount * t.creditGroup.total).toFixed(2) : t.amount;
+  document.getElementById('tx-amount').value = dispAmount;
+  document.getElementById('tx-name').value = t.name;
+  document.getElementById('tx-date').value = t.date;
+  document.getElementById('tx-installments').value = t.creditGroup ? t.creditGroup.total : 1;
+  document.getElementById('delete-btn').style.display = 'block';
+  setTxType(t.type, true);
+  setPayMethod(t.paymentMethod || 'cash');
+  setTimeout(() => { document.getElementById('tx-category').value = t.type === 'income' ? 'income' : t.category; updateInstallmentHint(); }, 10);
+  document.getElementById('tx-modal').classList.add('open');
+}
+
+function setTxType(type, skipCat) {
+  txType = type;
+  document.getElementById('btn-expense').className = type === 'expense' ? 'active-expense' : '';
+  document.getElementById('btn-income').className  = type === 'income'  ? 'active-income'  : '';
+  document.getElementById('pay-method-group').style.display = type === 'income' ? 'none' : '';
+  document.getElementById('installment-group').classList.toggle('visible', type === 'expense' && currentPayMethod === 'credit');
+  const catSel = document.getElementById('tx-category');
+  catSel.innerHTML = '';
+  (type === 'income' ? CATS.filter(c => c.id === 'income') : CATS.filter(c => c.id !== 'income'))
+    .forEach(c => catSel.insertAdjacentHTML('beforeend', `<option value="${c.id}">${c.icon} ${c.name}</option>`));
+}
+
+function setPayMethod(method) {
+  currentPayMethod = method;
+  document.querySelectorAll('.pay-btn').forEach(b => b.classList.toggle('active', b.dataset.pay === method));
+  document.getElementById('installment-group').classList.toggle('visible', method === 'credit' && txType === 'expense');
+  updateInstallmentHint();
+}
+
+function updateInstallmentHint() {
+  const hint = document.getElementById('installment-hint');
+  const amount = parseFloat(document.getElementById('tx-amount').value) || 0;
+  const n = parseInt(document.getElementById('tx-installments').value) || 1;
+  hint.textContent = (currentPayMethod === 'credit' && n > 1 && amount > 0)
+    ? `${fmtAmt(amount / n)} לתשלום × ${n} חודשים` : '';
+}
+
+document.getElementById('tx-amount').addEventListener('input', updateInstallmentHint);
+document.getElementById('tx-installments').addEventListener('input', updateInstallmentHint);
+
+async function saveTx() {
+  const totalAmount = parseFloat(document.getElementById('tx-amount').value);
+  const name    = document.getElementById('tx-name').value.trim();
+  const date    = document.getElementById('tx-date').value;
+  const catId   = document.getElementById('tx-category').value;
+  const payMethod = txType === 'income' ? null : currentPayMethod;
+  const numInst = payMethod === 'credit' ? (parseInt(document.getElementById('tx-installments').value) || 1) : 1;
+  if (!totalAmount || totalAmount <= 0 || !name || !date) return toast('נא למלא את כל השדות', 'error');
+
+  setLoading('tx-save-btn', true);
+
+  // If editing: delete old records first
+  if (editingTxId !== null) {
+    const t = transactions.find(tx => tx.id === editingTxId);
+    if (t?.creditGroup) {
+      const gId = t.creditGroup.groupId;
+      await dbDeleteTxs(transactions.filter(tx => tx.creditGroup?.groupId === gId).map(tx => tx.id));
+    } else if (t) {
+      await dbDeleteTxs([editingTxId]);
+    }
+  }
+
+  const category = txType === 'income' ? 'income' : catId;
+  if (payMethod === 'credit' && numInst > 1) {
+    const groupId = crypto.randomUUID();
+    const perAmt  = parseFloat((totalAmount / numInst).toFixed(2));
+    const [baseYear, baseMonth, baseDay] = date.split('-').map(Number);
+    const txList = Array.from({ length: numInst }, (_, i) => {
+      const mOffset = baseMonth - 1 + i;
+      const yr = baseYear + Math.floor(mOffset / 12);
+      const mo = mOffset % 12;
+      const dy = Math.min(baseDay, new Date(yr, mo + 1, 0).getDate());
+      return {
+        name, amount: perAmt, category, type: txType, paymentMethod: 'credit',
+        date: `${yr}-${String(mo + 1).padStart(2, '0')}-${String(dy).padStart(2, '0')}`,
+        creditGroup: { groupId, current: i + 1, total: numInst }
+      };
+    });
+    await dbInsertTxs(txList);
+  } else {
+    await dbInsertTxs([{ name, amount: totalAmount, category, type: txType, date, paymentMethod: payMethod }]);
+  }
+
+  setLoading('tx-save-btn', false);
+  closeModal('tx-modal');
+  renderAll();
+  toast('עסקה נשמרה', 'success');
+}
+
+async function deleteTx() {
+  const t = transactions.find(tx => tx.id === editingTxId);
+  if (!t) return;
+  if (t.creditGroup) {
+    if (!confirm(`מחוק את כל ${t.creditGroup.total} התשלומים?`)) return;
+    await dbDeleteTxs(transactions.filter(tx => tx.creditGroup?.groupId === t.creditGroup.groupId).map(tx => tx.id));
+  } else {
+    if (!confirm('למחוק את העסקה?')) return;
+    await dbDeleteTxs([editingTxId]);
+  }
+  closeModal('tx-modal');
+  renderAll();
+  toast('נמחק', 'success');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BUDGET MODAL
+// ═══════════════════════════════════════════════════════════════
+function openBudgetModal(catId) {
+  const sel = document.getElementById('budget-cat-select');
+  if (catId) sel.value = catId;
+  document.getElementById('budget-limit').value = budgets[sel.value] || '';
+  sel.onchange = () => { document.getElementById('budget-limit').value = budgets[sel.value] || ''; };
+  document.getElementById('budget-modal').classList.add('open');
+}
+
+async function saveBudget() {
+  const catId = document.getElementById('budget-cat-select').value;
+  const limit = parseFloat(document.getElementById('budget-limit').value) || 0;
+  setLoading('budget-save-btn', true);
+  await dbUpsertBudget(catId, limit);
+  setLoading('budget-save-btn', false);
+  closeModal('budget-modal');
+  renderAll();
+  toast('תקציב עודכן', 'success');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RECURRING MODAL
+// ═══════════════════════════════════════════════════════════════
+function openRecurringModal(id) {
+  editingRecId = id || null;
+  const r = id ? recurring.find(x => x.id === id) : null;
+  document.getElementById('rec-modal-title').textContent = r ? 'ערוך תשלום קבוע' : 'הוסף תשלום קבוע';
+  document.getElementById('rec-amount').value = r ? r.amount : '';
+  document.getElementById('rec-name').value   = r ? r.name   : '';
+  document.getElementById('rec-freq').value   = r ? r.freq   : 'monthly';
+  document.getElementById('rec-day').value    = r ? (r.day || 1) : 1;
+  document.getElementById('rec-delete-btn').style.display = r ? 'block' : 'none';
+  setRecType(r ? r.type : 'expense');
+  setTimeout(() => { if (r) document.getElementById('rec-category').value = r.category; }, 10);
+  document.getElementById('recurring-modal').classList.add('open');
+}
+
+function setRecType(type) {
+  recType = type;
+  document.getElementById('rbtn-expense').className = type === 'expense' ? 'active-expense' : '';
+  document.getElementById('rbtn-income').className  = type === 'income'  ? 'active-income'  : '';
+  const catSel = document.getElementById('rec-category');
+  catSel.innerHTML = '';
+  (type === 'income' ? CATS.filter(c => c.id === 'income') : CATS.filter(c => c.id !== 'income'))
+    .forEach(c => catSel.insertAdjacentHTML('beforeend', `<option value="${c.id}">${c.icon} ${c.name}</option>`));
+}
+
+async function saveRecurring() {
+  const amount = parseFloat(document.getElementById('rec-amount').value);
+  const name   = document.getElementById('rec-name').value.trim();
+  const freq   = document.getElementById('rec-freq').value;
+  const day    = parseInt(document.getElementById('rec-day').value) || 1;
+  const catId  = document.getElementById('rec-category').value;
+  if (!amount || amount <= 0 || !name) return toast('נא למלא את כל השדות', 'error');
+  setLoading('rec-save-btn', true);
+  if (editingRecId) {
+    await dbUpdateRecurring(editingRecId, { name, amount, category: catId, type: recType, freq, day });
+  } else {
+    const newRec = await dbInsertRecurring({ name, amount, category: catId, type: recType, freq, day });
+    if (newRec) await applyRecurring();
+  }
+  setLoading('rec-save-btn', false);
+  closeModal('recurring-modal');
+  renderAll();
+  toast('נשמר', 'success');
+}
+
+async function deleteRecurring() {
+  if (!confirm('למחוק את התשלום הקבוע ואת כל העסקאות שלו?')) return;
+  await dbDeleteRecurring(editingRecId);
+  closeModal('recurring-modal');
+  renderAll();
+  toast('נמחק', 'success');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════════════════════
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
+});
+
+function toast(msg, type = 'info') {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = 'toast show ' + type;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+function setLoading(btnId, loading) {
+  const btn = document.getElementById(btnId);
+  if (!btn) return;
+  btn.disabled = loading;
+  btn.textContent = loading ? 'שומר...' : (btnId === 'budget-save-btn' ? 'שמור' : btnId === 'rec-save-btn' ? 'שמור' : 'שמור');
+}
+
+function setLoadingLabel(txt) { document.getElementById('loading-label').textContent = txt; }
+
+// ═══════════════════════════════════════════════════════════════
+// SERVICE WORKER
+// ═══════════════════════════════════════════════════════════════
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
+  });
+}
+
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault(); deferredPrompt = e; showInstallBanner();
+});
+function showInstallBanner() {
+  if (document.getElementById('install-banner')) return;
+  const b = document.createElement('div');
+  b.id = 'install-banner';
+  b.style.cssText = 'position:fixed;bottom:calc(70px + 16px + 64px);left:50%;transform:translateX(-50%);background:#1c1c1e;color:#fff;padding:10px 16px;border-radius:12px;font-size:13px;z-index:9999;display:flex;align-items:center;gap:10px;direction:rtl;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,0.3)';
+  b.innerHTML = `<span>📲 התקן כאפליקציה</span><button onclick="installApp()" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:5px 12px;font-weight:700;cursor:pointer">התקן</button><button onclick="this.closest('#install-banner').remove()" style="background:none;color:#aaa;border:none;cursor:pointer;font-size:16px">✕</button>`;
+  document.body.appendChild(b);
+}
+function installApp() {
+  if (deferredPrompt) { deferredPrompt.prompt(); deferredPrompt.userChoice.then(() => { deferredPrompt = null; document.getElementById('install-banner')?.remove(); }); }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// START
+// ═══════════════════════════════════════════════════════════════
+boot().then(() => {
+  if (document.getElementById('screen-app').style.display !== 'none') initUI();
+});
+
+// Called after auth sets display to app
+const _origShowScreen = showScreen;
+window.showScreen = function(name) {
+  _origShowScreen(name);
+  if (name === 'app') initUI();
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#4f7eff"/>
+  <rect x="56" y="56" width="400" height="400" rx="80" fill="#4f7eff"/>
+  <!-- Wallet shape -->
+  <rect x="96" y="160" width="320" height="220" rx="24" fill="white" opacity="0.15"/>
+  <rect x="96" y="160" width="320" height="220" rx="24" fill="none" stroke="white" stroke-width="14"/>
+  <!-- Wallet flap -->
+  <rect x="96" y="160" width="320" height="64" rx="0" fill="white" opacity="0.2"/>
+  <rect x="96" y="160" width="320" height="64" rx="0" fill="none" stroke="white" stroke-width="0"/>
+  <path d="M96 200 h320" stroke="white" stroke-width="14" opacity="0.5"/>
+  <!-- Coin slot -->
+  <rect x="300" y="222" width="90" height="56" rx="28" fill="white" opacity="0.9"/>
+  <circle cx="345" cy="250" r="18" fill="#4f7eff"/>
+  <!-- Shekel symbol -->
+  <text x="256" y="290" text-anchor="middle" font-family="Arial, sans-serif" font-size="90" font-weight="900" fill="white" opacity="0.95">₪</text>
+</svg>
