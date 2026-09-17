@@ -365,7 +365,7 @@ canvas { max-height: 200px; }
         </div>
       </div>
       <div class="form-group">
-        <label>סכום (₪)</label>
+        <label id="tx-amount-label">סכום (₪)</label>
         <input type="number" id="tx-amount" placeholder="0.00" inputmode="decimal" step="0.01" min="0">
       </div>
       <div class="form-group">
@@ -1117,7 +1117,8 @@ function openEditModal(id) {
   if (!t) return;
   editingTxId = t.id;
   document.getElementById('tx-modal-title').textContent = 'ערוך עסקה';
-  const dispAmount = t.creditGroup ? (t.amount * t.creditGroup.total).toFixed(2) : t.amount;
+  // For credit installments: show per-installment amount (what was entered originally)
+  const dispAmount = t.creditGroup ? t.amount.toFixed(2) : t.amount;
   document.getElementById('tx-amount').value = dispAmount;
   document.getElementById('tx-name').value = t.name;
   document.getElementById('tx-date').value = t.date;
@@ -1160,23 +1161,32 @@ function setPayMethod(method) {
 }
 
 function updateInstallmentHint() {
-  const hint = document.getElementById('installment-hint');
+  const hint  = document.getElementById('installment-hint');
+  const label = document.getElementById('tx-amount-label');
   const amount = parseFloat(document.getElementById('tx-amount').value) || 0;
   const n = parseInt(document.getElementById('tx-installments').value) || 1;
-  hint.textContent = (currentPayMethod === 'credit' && n > 1 && amount > 0)
-    ? `${fmtAmt(amount / n)} לתשלום × ${n} חודשים` : '';
+  const isCredit = currentPayMethod === 'credit' && txType === 'expense';
+  if (isCredit && n > 1) {
+    label.textContent = 'סכום חודשי (₪)';
+    hint.textContent = amount > 0 ? `סה"כ: ${fmtAmt(amount * n)} (${n} × ${fmtAmt(amount)})` : '';
+  } else {
+    label.textContent = 'סכום (₪)';
+    hint.textContent = '';
+  }
 }
 
 document.getElementById('tx-amount').addEventListener('input', updateInstallmentHint);
 document.getElementById('tx-installments').addEventListener('input', updateInstallmentHint);
 
 async function saveTx() {
-  const totalAmount = parseFloat(document.getElementById('tx-amount').value);
+  const enteredAmount = parseFloat(document.getElementById('tx-amount').value);
   const name    = document.getElementById('tx-name').value.trim();
   const date    = document.getElementById('tx-date').value;
   const catId   = document.getElementById('tx-category').value;
   const payMethod = txType === 'income' ? null : currentPayMethod;
   const numInst  = payMethod === 'credit' ? (parseInt(document.getElementById('tx-installments').value) || 1) : 1;
+  // When credit with multiple installments, entered amount = monthly amount; total = monthly × n
+  const totalAmount = (payMethod === 'credit' && numInst > 1) ? enteredAmount * numInst : enteredAmount;
   const last4raw  = document.getElementById('tx-last4').value.trim();
   const creditLast4 = (payMethod === 'credit' && last4raw.length === 4) ? last4raw : null;
   if (!totalAmount || totalAmount <= 0 || !name || !date) return toast('נא למלא את כל השדות', 'error');
