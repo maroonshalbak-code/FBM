@@ -424,6 +424,7 @@ canvas { max-height: 200px; }
       <div class="form-group"><label>שם הבנק</label><input type="text" id="bank-name-input" placeholder="לדוגמה: בנק הפועלים"></div>
       <div class="form-group"><label>מספר חשבון / זיהוי</label><input type="text" id="bank-acct-input" placeholder="לדוגמה: 12-345-678901"></div>
       <div class="form-group"><label>יתרה נוכחית (₪)</label><input type="number" id="bank-balance-input" placeholder="0.00" inputmode="decimal" step="0.01"></div>
+      <div class="form-group"><label>מסגרת אשראי — מינוס מותר (₪)</label><input type="number" id="bank-frame-input" placeholder="0" inputmode="decimal" step="0.01" min="0"><small style="font-size:12px;color:var(--sub);margin-top:4px;display:block">הסכום המקסימלי שניתן להיכנס אליו במינוס</small></div>
       <button class="btn-primary" id="bank-save-btn" onclick="saveBankAccount()">שמור</button>
       <button class="btn-danger" id="bank-delete-btn" style="display:none" onclick="deleteBankAccount()">מחק חשבון</button>
       <button class="btn-cancel" onclick="closeModal('bank-modal')">ביטול</button>
@@ -724,7 +725,7 @@ function txToRow(tx) {
 }
 
 function rowToBank(row) {
-  return { id: row.id, name: row.name, accountId: row.account_id || '', balance: parseFloat(row.balance) };
+  return { id: row.id, name: row.name, accountId: row.account_id || '', balance: parseFloat(row.balance), frame: parseFloat(row.frame_limit) || 0 };
 }
 
 function rowToRec(row) {
@@ -842,7 +843,7 @@ async function dbDeleteRecurring(id) {
 
 async function dbInsertBank(acc) {
   const { data, error } = await sb.from('bank_accounts')
-    .insert({ user_id: currentUser.id, name: acc.name, account_id: acc.accountId, balance: acc.balance })
+    .insert({ user_id: currentUser.id, name: acc.name, account_id: acc.accountId, balance: acc.balance, frame_limit: acc.frame || 0 })
     .select();
   if (error) { toast(error.message, 'error'); return null; }
   const newAcc = rowToBank(data[0]);
@@ -852,9 +853,10 @@ async function dbInsertBank(acc) {
 
 async function dbUpdateBank(id, fields) {
   const row = {};
-  if (fields.name      !== undefined) row.name       = fields.name;
-  if (fields.accountId !== undefined) row.account_id = fields.accountId;
-  if (fields.balance   !== undefined) row.balance    = fields.balance;
+  if (fields.name      !== undefined) row.name        = fields.name;
+  if (fields.accountId !== undefined) row.account_id  = fields.accountId;
+  if (fields.balance   !== undefined) row.balance     = fields.balance;
+  if (fields.frame     !== undefined) row.frame_limit = fields.frame;
   const { error } = await sb.from('bank_accounts').update(row).eq('id', id).eq('user_id', currentUser.id);
   if (error) { toast(error.message, 'error'); return false; }
   bankAccounts = bankAccounts.map(a => a.id === id ? { ...a, ...fields } : a);
@@ -1027,14 +1029,27 @@ function renderAll() {
   const bankListEl = document.getElementById('bank-list');
   if (bankListEl) {
     bankListEl.innerHTML = bankAccounts.length
-      ? bankAccounts.map(a => `<div class="bank-card" onclick="openBankModal('${a.id}')">
-          <div class="bank-icon">🏦</div>
-          <div class="bank-info">
-            <div class="bank-name">${a.name}</div>
-            ${a.accountId ? `<div class="bank-acct">${a.accountId}</div>` : ''}
-          </div>
-          <div class="bank-balance ${a.balance < 0 ? 'neg' : 'pos'}">${a.balance < 0 ? '-' : ''}${fmtAmt(a.balance)}</div>
-        </div>`).join('')
+      ? bankAccounts.map(a => {
+          let frameBar = '';
+          if (a.frame > 0 && a.balance < 0) {
+            const used = Math.min(Math.abs(a.balance), a.frame);
+            const pct  = Math.round((used / a.frame) * 100);
+            const cls  = pct >= 90 ? 'over' : pct >= 60 ? 'warn' : 'ok';
+            frameBar = `<div style="margin-top:8px"><div style="display:flex;justify-content:space-between;font-size:11px;color:var(--sub);margin-bottom:3px"><span>מסגרת בשימוש</span><span>${fmtAmt(used)} / ${fmtAmt(a.frame)}</span></div><div class="progress-bar"><div class="progress-fill ${cls}" style="width:${pct}%"></div></div></div>`;
+          } else if (a.frame > 0) {
+            frameBar = `<div style="font-size:11px;color:var(--sub);margin-top:4px">מסגרת: ${fmtAmt(a.frame)}</div>`;
+          }
+          return `<div class="bank-card" style="flex-direction:column;align-items:stretch" onclick="openBankModal('${a.id}')">
+            <div style="display:flex;align-items:center;gap:14px">
+              <div class="bank-icon">🏦</div>
+              <div class="bank-info">
+                <div class="bank-name">${a.name}</div>
+                ${a.accountId ? `<div class="bank-acct">${a.accountId}</div>` : ''}
+              </div>
+              <div class="bank-balance ${a.balance < 0 ? 'neg' : 'pos'}">${a.balance < 0 ? '-' : ''}${fmtAmt(a.balance)}</div>
+            </div>${frameBar}
+          </div>`;
+        }).join('')
       : '<div class="empty"><div class="icon">🏦</div><p>הוסף חשבון בנק ראשון</p></div>';
   }
 }
@@ -1306,6 +1321,7 @@ function openBankModal(id) {
   document.getElementById('bank-name-input').value    = a ? a.name      : '';
   document.getElementById('bank-acct-input').value    = a ? a.accountId : '';
   document.getElementById('bank-balance-input').value = a ? a.balance   : '';
+  document.getElementById('bank-frame-input').value   = a && a.frame ? a.frame : '';
   document.getElementById('bank-delete-btn').style.display = a ? 'block' : 'none';
   document.getElementById('bank-modal').classList.add('open');
 }
@@ -1314,12 +1330,13 @@ async function saveBankAccount() {
   const name      = document.getElementById('bank-name-input').value.trim();
   const accountId = document.getElementById('bank-acct-input').value.trim();
   const balance   = parseFloat(document.getElementById('bank-balance-input').value);
+  const frame     = parseFloat(document.getElementById('bank-frame-input').value) || 0;
   if (!name || isNaN(balance)) return toast('נא למלא שם ויתרה', 'error');
   setLoading('bank-save-btn', true);
   if (editingBankId) {
-    await dbUpdateBank(editingBankId, { name, accountId, balance });
+    await dbUpdateBank(editingBankId, { name, accountId, balance, frame });
   } else {
-    await dbInsertBank({ name, accountId, balance });
+    await dbInsertBank({ name, accountId, balance, frame });
   }
   setLoading('bank-save-btn', false);
   closeModal('bank-modal');

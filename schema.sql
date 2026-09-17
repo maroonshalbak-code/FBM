@@ -50,6 +50,7 @@ create table if not exists public.bank_accounts (
   name        text not null,
   account_id  text,
   balance     numeric(12,2) not null default 0,
+  frame_limit numeric(12,2) not null default 0,
   created_at  timestamptz default now()
 );
 
