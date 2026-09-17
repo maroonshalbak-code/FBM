@@ -177,6 +177,19 @@ canvas { max-height: 200px; }
 @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
 .user-email { font-size: 13px; color: var(--sub); margin-bottom: 12px; word-break: break-all; }
 .user-menu-btn { width: 100%; padding: 10px 14px; background: none; border: 1.5px solid var(--border); border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; color: var(--accent2); font-family: inherit; text-align: center; }
+
+/* ── BANK ACCOUNTS ── */
+.bank-card { background: var(--card); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); display: flex; align-items: center; gap: 14px; cursor: pointer; }
+.bank-icon { width: 44px; height: 44px; border-radius: 12px; background: #eef2ff; display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+.bank-info { flex: 1; min-width: 0; }
+.bank-name { font-size: 15px; font-weight: 600; }
+.bank-acct { font-size: 12px; color: var(--sub); margin-top: 2px; direction: ltr; text-align: right; }
+.bank-balance { font-size: 20px; font-weight: 700; flex-shrink: 0; direction: ltr; }
+.bank-balance.pos { color: var(--green); }
+.bank-balance.neg { color: var(--accent2); }
+.bank-total-strip { background: linear-gradient(135deg, var(--accent), #7b5cff); border-radius: var(--radius); padding: 18px; color: #fff; margin-bottom: 16px; }
+.bank-total-strip .lbl { font-size: 12px; opacity: 0.8; margin-bottom: 4px; }
+.bank-total-strip .val { font-size: 30px; font-weight: 800; direction: ltr; }
 </style>
 </head>
 <body>
@@ -302,8 +315,24 @@ canvas { max-height: 200px; }
     <div class="card" id="recurring-list"></div>
   </div>
 
+  <!-- Bank Status page -->
+  <div class="page" id="page-bank">
+    <div class="page-header">
+      <h1>חשבונות בנק</h1>
+    </div>
+    <div class="bank-total-strip">
+      <div class="lbl">סך יתרות</div>
+      <div class="val" id="bank-total-val">₪0.00</div>
+    </div>
+    <div id="bank-list"></div>
+  </div>
+
   <!-- Bottom nav -->
   <nav>
+    <button onclick="showPage('bank')" id="nav-bank">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="10" width="18" height="11" rx="1"/><path d="M3 10l9-7 9 7"/><line x1="12" y1="10" x2="12" y2="21"/><line x1="7" y1="14" x2="7" y2="21"/><line x1="17" y1="14" x2="17" y2="21"/></svg>
+      בנק
+    </button>
     <button onclick="showPage('recurring')" id="nav-recurring">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
       קבועים
@@ -365,6 +394,10 @@ canvas { max-height: 200px; }
         <input type="number" id="tx-installments" value="1" min="1" max="120" inputmode="numeric">
         <p style="font-size:12px;color:var(--sub);margin-top:6px;" id="installment-hint"></p>
       </div>
+      <div class="form-group" id="credit-last4-group" style="display:none">
+        <label>4 ספרות אחרונות של הכרטיס</label>
+        <input type="text" id="tx-last4" placeholder="1234" maxlength="4" inputmode="numeric" pattern="[0-9]{4}" style="direction:ltr;text-align:left;letter-spacing:4px;font-weight:600">
+      </div>
       <button class="btn-primary" id="tx-save-btn" onclick="saveTx()">שמור</button>
       <button class="btn-danger" id="delete-btn" style="display:none" onclick="deleteTx()">מחק</button>
       <button class="btn-cancel" onclick="closeModal('tx-modal')">ביטול</button>
@@ -379,6 +412,19 @@ canvas { max-height: 200px; }
       <div class="form-group"><label>תקרה חודשית (₪)</label><input type="number" id="budget-limit" placeholder="0" inputmode="decimal" min="0"></div>
       <button class="btn-primary" id="budget-save-btn" onclick="saveBudget()">שמור</button>
       <button class="btn-cancel" onclick="closeModal('budget-modal')">ביטול</button>
+    </div>
+  </div>
+
+  <!-- Bank account modal -->
+  <div class="modal-overlay" id="bank-modal">
+    <div class="modal">
+      <h2 id="bank-modal-title">הוסף חשבון בנק</h2>
+      <div class="form-group"><label>שם הבנק</label><input type="text" id="bank-name-input" placeholder="לדוגמה: בנק הפועלים"></div>
+      <div class="form-group"><label>מספר חשבון / זיהוי</label><input type="text" id="bank-acct-input" placeholder="לדוגמה: 12-345-678901"></div>
+      <div class="form-group"><label>יתרה נוכחית (₪)</label><input type="number" id="bank-balance-input" placeholder="0.00" inputmode="decimal" step="0.01"></div>
+      <button class="btn-primary" id="bank-save-btn" onclick="saveBankAccount()">שמור</button>
+      <button class="btn-danger" id="bank-delete-btn" style="display:none" onclick="deleteBankAccount()">מחק חשבון</button>
+      <button class="btn-cancel" onclick="closeModal('bank-modal')">ביטול</button>
     </div>
   </div>
 
@@ -464,6 +510,7 @@ create table if not exists public.transactions (
   credit_group_id text,
   credit_current integer,
   credit_total integer,
+  credit_last4 varchar(4),
   recurring_id uuid,
   created_at timestamptz default now()
 );
@@ -488,15 +535,27 @@ create table if not exists public.recurring (
   created_at timestamptz default now()
 );
 
+create table if not exists public.bank_accounts (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade not null,
+  name text not null,
+  account_id text,
+  balance numeric(12,2) not null default 0,
+  created_at timestamptz default now()
+);
+
 alter table public.transactions enable row level security;
 alter table public.budgets enable row level security;
 alter table public.recurring enable row level security;
+alter table public.bank_accounts enable row level security;
 
 create policy "own_transactions" on public.transactions
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "own_budgets" on public.budgets
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "own_recurring" on public.recurring
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "own_bank_accounts" on public.bank_accounts
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);`;
 
 function catById(id) { return CATS.find(c => c.id === id) || CATS[CATS.length - 2]; }
@@ -628,6 +687,7 @@ function copySchema() {
 let transactions = [];
 let budgets = {};
 let recurring = [];
+let bankAccounts = [];
 let currentMonth = new Date().getMonth();
 let currentYear  = new Date().getFullYear();
 
@@ -640,6 +700,7 @@ function rowToTx(row) {
     type: row.type,
     date: (row.date || '').substring(0, 10),
     paymentMethod: row.payment_method,
+    creditLast4: row.credit_last4 || null,
     recurringId: row.recurring_id,
     creditGroup: row.credit_group_id
       ? { groupId: row.credit_group_id, current: row.credit_current, total: row.credit_total }
@@ -652,11 +713,16 @@ function txToRow(tx) {
     user_id: currentUser.id,
     name: tx.name, amount: tx.amount, category: tx.category, type: tx.type, date: tx.date,
     payment_method:  tx.paymentMethod || null,
+    credit_last4:    tx.creditLast4   || null,
     recurring_id:    tx.recurringId   || null,
     credit_group_id: tx.creditGroup?.groupId  || null,
     credit_current:  tx.creditGroup?.current  || null,
     credit_total:    tx.creditGroup?.total    || null
   };
+}
+
+function rowToBank(row) {
+  return { id: row.id, name: row.name, accountId: row.account_id || '', balance: parseFloat(row.balance) };
 }
 
 function rowToRec(row) {
@@ -666,17 +732,20 @@ function rowToRec(row) {
 async function loadData() {
   setLoadingLabel('טוען נתונים...');
   const uid = currentUser.id;
-  const [txRes, budRes, recRes] = await Promise.all([
+  const [txRes, budRes, recRes, bankRes] = await Promise.all([
     sb.from('transactions').select('*').eq('user_id', uid).order('date', { ascending: false }),
     sb.from('budgets').select('*').eq('user_id', uid),
-    sb.from('recurring').select('*').eq('user_id', uid).order('created_at')
+    sb.from('recurring').select('*').eq('user_id', uid).order('created_at'),
+    sb.from('bank_accounts').select('*').eq('user_id', uid).order('created_at')
   ]);
-  if (txRes.error)  toast(txRes.error.message,  'error');
-  if (budRes.error) toast(budRes.error.message, 'error');
-  if (recRes.error) toast(recRes.error.message, 'error');
-  transactions = (txRes.data  || []).map(rowToTx);
+  if (txRes.error)   toast(txRes.error.message,   'error');
+  if (budRes.error)  toast(budRes.error.message,  'error');
+  if (recRes.error)  toast(recRes.error.message,  'error');
+  if (bankRes.error) toast(bankRes.error.message, 'error');
+  transactions = (txRes.data   || []).map(rowToTx);
   budgets      = Object.fromEntries((budRes.data || []).map(b => [b.category, parseFloat(b.limit_amount)]));
-  recurring    = (recRes.data || []).map(rowToRec);
+  recurring    = (recRes.data  || []).map(rowToRec);
+  bankAccounts = (bankRes.data || []).map(rowToBank);
   await applyRecurring();
 }
 
@@ -769,11 +838,39 @@ async function dbDeleteRecurring(id) {
   await dbDeleteTxs(orphanIds);
 }
 
+async function dbInsertBank(acc) {
+  const { data, error } = await sb.from('bank_accounts')
+    .insert({ user_id: currentUser.id, name: acc.name, account_id: acc.accountId, balance: acc.balance })
+    .select();
+  if (error) { toast(error.message, 'error'); return null; }
+  const newAcc = rowToBank(data[0]);
+  bankAccounts = [...bankAccounts, newAcc];
+  return newAcc;
+}
+
+async function dbUpdateBank(id, fields) {
+  const row = {};
+  if (fields.name      !== undefined) row.name       = fields.name;
+  if (fields.accountId !== undefined) row.account_id = fields.accountId;
+  if (fields.balance   !== undefined) row.balance    = fields.balance;
+  const { error } = await sb.from('bank_accounts').update(row).eq('id', id).eq('user_id', currentUser.id);
+  if (error) { toast(error.message, 'error'); return false; }
+  bankAccounts = bankAccounts.map(a => a.id === id ? { ...a, ...fields } : a);
+  return true;
+}
+
+async function dbDeleteBank(id) {
+  const { error } = await sb.from('bank_accounts').delete().eq('id', id).eq('user_id', currentUser.id);
+  if (error) { toast(error.message, 'error'); return; }
+  bankAccounts = bankAccounts.filter(a => a.id !== id);
+}
+
 // ═══════════════════════════════════════════════════════════════
 // APP STATE
 // ═══════════════════════════════════════════════════════════════
 let editingTxId = null;
 let editingRecId = null;
+let editingBankId = null;
 let txType = 'expense';
 let recType = 'expense';
 let filterCat = 'all';
@@ -828,6 +925,7 @@ function showPage(name) {
   const fab = document.getElementById('fab');
   if (name === 'home' || name === 'recurring') fab.style.display = 'none';
   else if (name === 'budget') { fab.style.display = 'flex'; fab.onclick = openBudgetModal; fab.textContent = '+'; }
+  else if (name === 'bank')   { fab.style.display = 'flex'; fab.onclick = () => openBankModal(); fab.textContent = '+'; }
   else { fab.style.display = 'flex'; fab.onclick = openAddModal; fab.textContent = '+'; }
   renderAll();
 }
@@ -919,6 +1017,24 @@ function renderAll() {
         </div>`;
       }).join('')
     : '<div class="empty"><div class="icon">🔄</div><p>אין תשלומים קבועים עדיין</p></div>';
+
+  // Bank accounts
+  const bankTotal = bankAccounts.reduce((s, a) => s + a.balance, 0);
+  const bankTotalEl = document.getElementById('bank-total-val');
+  if (bankTotalEl) bankTotalEl.textContent = (bankTotal < 0 ? '-' : '') + fmtAmt(bankTotal);
+  const bankListEl = document.getElementById('bank-list');
+  if (bankListEl) {
+    bankListEl.innerHTML = bankAccounts.length
+      ? bankAccounts.map(a => `<div class="bank-card" onclick="openBankModal('${a.id}')">
+          <div class="bank-icon">🏦</div>
+          <div class="bank-info">
+            <div class="bank-name">${a.name}</div>
+            ${a.accountId ? `<div class="bank-acct">${a.accountId}</div>` : ''}
+          </div>
+          <div class="bank-balance ${a.balance < 0 ? 'neg' : 'pos'}">${a.balance < 0 ? '-' : ''}${fmtAmt(a.balance)}</div>
+        </div>`).join('')
+      : '<div class="empty"><div class="icon">🏦</div><p>הוסף חשבון בנק ראשון</p></div>';
+  }
 }
 
 function txHTML(t, clickable) {
@@ -928,8 +1044,15 @@ function txHTML(t, clickable) {
   const click = clickable ? `onclick="openEditModal('${t.id}')"` : '';
   let badge = '';
   if (t.type === 'expense') {
-    if (t.creditGroup) badge = `<span class="credit-badge">💳 ${t.creditGroup.current}/${t.creditGroup.total}</span>`;
-    else if (t.paymentMethod && t.paymentMethod !== 'credit') badge = `<span class="pay-badge ${PAY_CLASSES[t.paymentMethod]}">${PAY_LABELS[t.paymentMethod]}</span>`;
+    if (t.creditGroup) {
+      const last4txt = t.creditLast4 ? ` ···${t.creditLast4}` : '';
+      badge = `<span class="credit-badge">💳${last4txt} ${t.creditGroup.current}/${t.creditGroup.total}</span>`;
+    } else if (t.paymentMethod === 'credit') {
+      const last4txt = t.creditLast4 ? ` ···${t.creditLast4}` : '';
+      badge = `<span class="pay-badge credit">💳${last4txt}</span>`;
+    } else if (t.paymentMethod) {
+      badge = `<span class="pay-badge ${PAY_CLASSES[t.paymentMethod]}">${PAY_LABELS[t.paymentMethod]}</span>`;
+    }
   }
   return `<div class="tx-item" ${click}>
     <div class="tx-icon" style="background:${c.color}22">${c.icon}</div>
@@ -959,6 +1082,7 @@ function openAddModal() {
   document.getElementById('delete-btn').style.display = 'none';
   document.getElementById('tx-installments').value = 1;
   document.getElementById('installment-hint').textContent = '';
+  document.getElementById('tx-last4').value = '';
   setTxType('expense');
   setPayMethod('credit');
   document.getElementById('tx-modal').classList.add('open');
@@ -974,6 +1098,7 @@ function openEditModal(id) {
   document.getElementById('tx-name').value = t.name;
   document.getElementById('tx-date').value = t.date;
   document.getElementById('tx-installments').value = t.creditGroup ? t.creditGroup.total : 1;
+  document.getElementById('tx-last4').value = t.creditLast4 || '';
   document.getElementById('delete-btn').style.display = 'block';
   setTxType(t.type, true);
   setPayMethod(t.paymentMethod || 'cash');
@@ -987,6 +1112,7 @@ function setTxType(type, skipCat) {
   document.getElementById('btn-income').className  = type === 'income'  ? 'active-income'  : '';
   document.getElementById('pay-method-group').style.display = type === 'income' ? 'none' : '';
   document.getElementById('installment-group').classList.toggle('visible', type === 'expense' && currentPayMethod === 'credit');
+  document.getElementById('credit-last4-group').style.display = (type === 'expense' && currentPayMethod === 'credit') ? '' : 'none';
   const catSel = document.getElementById('tx-category');
   catSel.innerHTML = '';
   (type === 'income' ? CATS.filter(c => c.id === 'income') : CATS.filter(c => c.id !== 'income'))
@@ -997,6 +1123,7 @@ function setPayMethod(method) {
   currentPayMethod = method;
   document.querySelectorAll('.pay-btn').forEach(b => b.classList.toggle('active', b.dataset.pay === method));
   document.getElementById('installment-group').classList.toggle('visible', method === 'credit' && txType === 'expense');
+  document.getElementById('credit-last4-group').style.display = (method === 'credit' && txType === 'expense') ? '' : 'none';
   updateInstallmentHint();
 }
 
@@ -1017,7 +1144,9 @@ async function saveTx() {
   const date    = document.getElementById('tx-date').value;
   const catId   = document.getElementById('tx-category').value;
   const payMethod = txType === 'income' ? null : currentPayMethod;
-  const numInst = payMethod === 'credit' ? (parseInt(document.getElementById('tx-installments').value) || 1) : 1;
+  const numInst  = payMethod === 'credit' ? (parseInt(document.getElementById('tx-installments').value) || 1) : 1;
+  const last4raw  = document.getElementById('tx-last4').value.trim();
+  const creditLast4 = (payMethod === 'credit' && last4raw.length === 4) ? last4raw : null;
   if (!totalAmount || totalAmount <= 0 || !name || !date) return toast('נא למלא את כל השדות', 'error');
 
   setLoading('tx-save-btn', true);
@@ -1044,14 +1173,14 @@ async function saveTx() {
       const mo = mOffset % 12;
       const dy = Math.min(baseDay, new Date(yr, mo + 1, 0).getDate());
       return {
-        name, amount: perAmt, category, type: txType, paymentMethod: 'credit',
+        name, amount: perAmt, category, type: txType, paymentMethod: 'credit', creditLast4,
         date: `${yr}-${String(mo + 1).padStart(2, '0')}-${String(dy).padStart(2, '0')}`,
         creditGroup: { groupId, current: i + 1, total: numInst }
       };
     });
     await dbInsertTxs(txList);
   } else {
-    await dbInsertTxs([{ name, amount: totalAmount, category, type: txType, date, paymentMethod: payMethod }]);
+    await dbInsertTxs([{ name, amount: totalAmount, category, type: txType, date, paymentMethod: payMethod, creditLast4 }]);
   }
 
   setLoading('tx-save-btn', false);
@@ -1148,6 +1277,45 @@ async function deleteRecurring() {
   if (!confirm('למחוק את התשלום הקבוע ואת כל העסקאות שלו?')) return;
   await dbDeleteRecurring(editingRecId);
   closeModal('recurring-modal');
+  renderAll();
+  toast('נמחק', 'success');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BANK MODAL
+// ═══════════════════════════════════════════════════════════════
+function openBankModal(id) {
+  editingBankId = id || null;
+  const a = id ? bankAccounts.find(x => x.id === id) : null;
+  document.getElementById('bank-modal-title').textContent = a ? 'ערוך חשבון בנק' : 'הוסף חשבון בנק';
+  document.getElementById('bank-name-input').value    = a ? a.name      : '';
+  document.getElementById('bank-acct-input').value    = a ? a.accountId : '';
+  document.getElementById('bank-balance-input').value = a ? a.balance   : '';
+  document.getElementById('bank-delete-btn').style.display = a ? 'block' : 'none';
+  document.getElementById('bank-modal').classList.add('open');
+}
+
+async function saveBankAccount() {
+  const name      = document.getElementById('bank-name-input').value.trim();
+  const accountId = document.getElementById('bank-acct-input').value.trim();
+  const balance   = parseFloat(document.getElementById('bank-balance-input').value);
+  if (!name || isNaN(balance)) return toast('נא למלא שם ויתרה', 'error');
+  setLoading('bank-save-btn', true);
+  if (editingBankId) {
+    await dbUpdateBank(editingBankId, { name, accountId, balance });
+  } else {
+    await dbInsertBank({ name, accountId, balance });
+  }
+  setLoading('bank-save-btn', false);
+  closeModal('bank-modal');
+  renderAll();
+  toast('חשבון נשמר', 'success');
+}
+
+async function deleteBankAccount() {
+  if (!confirm('למחוק את חשבון הבנק?')) return;
+  await dbDeleteBank(editingBankId);
+  closeModal('bank-modal');
   renderAll();
   toast('נמחק', 'success');
 }
